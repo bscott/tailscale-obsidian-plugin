@@ -1,7 +1,7 @@
 {
-	"id": "tailscale-obsidian",
+	"id": "tailscale",
 	"name": "Tailscale (Unofficial) Obsidian Plugin",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"minAppVersion": "0.15.0",
 	"description": "Pulls in Node data from your Tailnet in Tailscale and creates a note.",
 	"author": "Brian Scott",
