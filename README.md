@@ -3,6 +3,8 @@
 
 This plugin integrates Tailscale functionality into your Obsidian workspace, allowing you to manage and view your Tailscale network directly from within Obsidian.
 
+This plugin is NOT made by [Tailscale](https://tailscale.com) the company and has no official support by them. 
+
 ## Features
 
 - View active devices on your Tailscale network
