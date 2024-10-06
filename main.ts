@@ -1,18 +1,46 @@
-const obsidian = require('obsidian');
+import { App, Plugin, PluginSettingTab, Setting, TFile, Notice, requestUrl, RequestUrlResponse } from 'obsidian';
+
+interface TailscaleDevice {
+    name: string;
+    addresses: string[];
+    lastSeen: string;
+    // Add other properties as needed
+}
+
+interface TailscaleAPIResponse {
+    devices: TailscaleDevice[];
+}
+
+interface TailscaleNode {
+    name: string;
+    online: boolean;
+    tailscaleIP: string;
+}
+
+interface TailscalePluginSettings {
+    authToken: string;
+}
+
+const DEFAULT_SETTINGS: TailscalePluginSettings = {
+    authToken: ''
+}
 
 class TailscaleAPI {
-    constructor(authToken) {
+    private authToken: string;
+    private baseUrl: string;
+
+    constructor(authToken: string) {
         this.authToken = authToken;
         this.baseUrl = 'https://api.tailscale.com/api/v2';
     }
 
-    setAuthToken(authToken) {
+    setAuthToken(authToken: string): void {
         this.authToken = authToken;
     }
 
-    async getNodes() {
+    async getNodes(): Promise<TailscaleNode[]> {
         try {
-            const response = await obsidian.requestUrl({
+            const response: RequestUrlResponse = await requestUrl({
                 url: `${this.baseUrl}/tailnet/-/devices`,
                 method: 'GET',
                 headers: {
@@ -25,24 +53,13 @@ class TailscaleAPI {
                 throw new Error(`Failed to fetch nodes: ${response.status}`);
             }
 
-            const data = JSON.parse(response.text);
-            console.log('Raw API response:', JSON.stringify(data, null, 2));
+            const data: TailscaleAPIResponse = JSON.parse(response.text);
 
-            return data.devices.map((device) => {
-                // Determine if the device is online (active within the last 5 minutes)
+            return data.devices.map((device: TailscaleDevice) => {
                 const lastSeenDate = new Date(device.lastSeen);
                 const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
                 const isOnline = lastSeenDate > fiveMinutesAgo;
-
-                // Get the Tailscale IP (first IPv4 address)
-                const tailscaleIP = device.addresses.find(addr => addr.includes('.')) || 'N/A';
-
-                console.log(`Device ${device.name}:`, {
-                    online: isOnline,
-                    tailscaleIP: tailscaleIP,
-                    lastSeen: device.lastSeen,
-                    fullDevice: device  // Log the entire device object
-                });
+                const tailscaleIP = device.addresses.find((addr: string) => addr.includes('.')) || 'N/A';
 
                 return {
                     name: device.name,
@@ -57,13 +74,9 @@ class TailscaleAPI {
     }
 }
 
-const DEFAULT_SETTINGS = {
-    authToken: ''
-}
-
-module.exports = class TailscalePlugin extends obsidian.Plugin {
-    settings;
-    api;
+export default class TailscalePlugin extends Plugin {
+    settings: TailscalePluginSettings;
+    api: TailscaleAPI;
 
     async onload() {
         await this.loadSettings();
@@ -78,7 +91,7 @@ module.exports = class TailscalePlugin extends obsidian.Plugin {
 
         this.addSettingTab(new TailscaleSettingTab(this.app, this));
 
-        // Schedule regular updates (e.g., every 5 minutes)
+        // Schedule regular updates every 5 minutes
         this.registerInterval(
             window.setInterval(() => this.updateTailscaleNote(), 5 * 60 * 1000)
         );
@@ -99,23 +112,19 @@ module.exports = class TailscalePlugin extends obsidian.Plugin {
         if (!file) {
             try {
                 file = await this.app.vault.create(fileName, '# Tailscale Nodes\n\n');
-                console.log(`Created new file: ${fileName}`);
             } catch (error) {
-                console.error(`Error creating file ${fileName}:`, error);
-                new obsidian.Notice(`Error creating Tailscale note. Check console for details.`);
+                new Notice(`Error creating Tailscale note. Check console for details.`);
                 return;
             }
         }
 
-        if (!(file instanceof obsidian.TFile)) {
-            console.error('Tailscale.md is not a file');
-            new obsidian.Notice(`Error: Tailscale.md is not a valid file.`);
+        if (!(file instanceof TFile)) {
+            new Notice(`Error: Tailscale.md is not a valid file.`);
             return;
         }
 
         try {
             const nodes = await this.api.getNodes();
-            console.log(`Fetched ${nodes.length} nodes from Tailscale API`);
 
             let content = '# Tailscale Nodes\n\n';
             content += '| Node Name | Tailscale UP | Tailscale IP |\n';
@@ -123,44 +132,36 @@ module.exports = class TailscalePlugin extends obsidian.Plugin {
 
             for (const node of nodes) {
                 content += `| ${node.name} | ${node.online ? 'Yes' : 'No'} | ${node.tailscaleIP} |\n`;
-                console.log(`Processed Node: ${node.name}, Online: ${node.online}, Tailscale IP: ${node.tailscaleIP}`);
             }
 
-            console.log('Content to be written:', content);
-
-            // Read the current content of the file
             const currentContent = await this.app.vault.read(file);
-            console.log('Current file content:', currentContent);
 
             if (currentContent !== content) {
                 await this.app.vault.modify(file, content);
-                console.log('Tailscale note updated successfully');
-                new obsidian.Notice('Tailscale note updated');
-            } else {
-                console.log('No changes needed, file content is up to date');
+                new Notice('Tailscale note updated');
             }
         } catch (error) {
             console.error('Error updating Tailscale note:', error);
-            new obsidian.Notice(`Error updating Tailscale note. Check console for details.`);
+            new Notice(`Error updating Tailscale note. Check console for details.`);
         }
     }
 }
 
-class TailscaleSettingTab extends obsidian.PluginSettingTab {
-    plugin;
+class TailscaleSettingTab extends PluginSettingTab {
+    plugin: TailscalePlugin;
 
-    constructor(app, plugin) {
+    constructor(app: App, plugin: TailscalePlugin) {
         super(app, plugin);
         this.plugin = plugin;
     }
 
-    display() {
+    display(): void {
         const {containerEl} = this;
 
         containerEl.empty();
         containerEl.createEl('h2', {text: 'Tailscale Plugin Settings'});
 
-        new obsidian.Setting(containerEl)
+        new Setting(containerEl)
             .setName('Tailscale Auth API Token')
             .setDesc('Enter your Tailscale Auth API token')
             .addText(text => text
