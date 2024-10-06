@@ -1,7 +1,7 @@
 {
 	"id": "tailscale",
-	"name": "Tailscale (Unofficial) Plugin",
-	"version": "0.3.0",
+	"name": "Tailscale (Unofficial)",
+	"version": "0.4.0",
 	"minAppVersion": "0.15.0",
 	"description": "Pulls in Node data from your Tailnet in Tailscale and creates a note.",
 	"author": "Brian Scott",
